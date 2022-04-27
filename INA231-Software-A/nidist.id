@@ -1,0 +1,8 @@
+[Volume Id]
+DistributionGUID={95366F24-3136-4663-A299-1540D3860EC3}
+DistPackageGUID={511A80F1-E927-4D4F-8743-4DBE266126B3}
+DistributionVersion=1.0.3
+DistributionType=MDF
+DistributionLanguage=9
+Volume=1
+ExePath=setup.exe

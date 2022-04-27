@@ -1,0 +1,8 @@
+0,Config Reg,R/W,0,
+1,Shunt Voltage,R,0,0
+2,Bus Voltage,R,0,0
+3,Power,R,0,0
+4,Current,R,0,0
+5,Calibration,R/W,0,
+6,Mask,R/W,0,
+7,Alert Limit,R/W,0,0
