@@ -30,12 +30,10 @@ enum ti_smusbdig_function {
 enum ti_smusbdig_sub_command {
 	TI_SMUSBDIG_COMMAND_DUTPOWERON	= 0x01,
 	TI_SMUSBDIG_COMMAND_DUTPOWEROFF	= 0x02,
-	TI_SMUSBDIG_COMMAND_TEST1 = 0x00,
-	TI_SMUSBDIG_COMMAND_TEST2 = 0x03,
-	VOLT0 = 0,
-	VOLT3 = 3,
-	VOLT5 = 5,
-	VOLT6 = 6, 
+	TI_SMUSBDIG_SET_VOUT = 0x04,
+	TI_SMUSBDIG_DUTOFF = 0x9E,
+	TI_SMUSBDIG_VOUT5 = 0x9C,
+	TI_SMUSBDIG_VOUT3 = 0x98,
 };
 
 struct ti_smusbdig_packet {
@@ -77,5 +75,8 @@ ti_smusbdig_packet_add_data(struct ti_smusbdig_packet *packet, u8 data)
 struct ti_smusbdig_device;
 int ti_smusbdig_xfer(struct ti_smusbdig_device *ti_smusbdig,
 		     u8 *buffer, int size);
+
+extern int readvolt(struct ti_smusbdig_device *ti_smusbdig);
+extern void setvolt(struct ti_smusbdig_device *ti_smusbdig, int volts);
 
 #endif /* __LINUX_MFD_TI_SMUSBDIG_H */

@@ -15,7 +15,8 @@
  */
 
 #include <linux/mfd/core.h>
-#include <linux/mfd/ti-smusbdig.h>
+//#include <linux/mfd/ti-smusbdig.h>
+#include "../ti-smusbdig.h"
 #include <linux/module.h>
 #include <linux/usb.h>
 
@@ -28,16 +29,33 @@ struct ti_smusbdig_device {
 	struct usb_device *usb_dev;
 	struct usb_interface *interface;
 	const struct usb_device_id	*usb_dev_id;
+	int vout;
 };
+
+
 
 static int create_sysfs_attrs(struct usb_interface *interface);
 
 static ssize_t dut_show(struct device *dev,
 				  struct device_attribute *attr, char *buf)
 {
+    struct ti_smusbdig_device *ti_smusbdig = dev_get_drvdata(dev);
+    int ret2 = ti_smusbdig->vout;
 
-		return 0;
+	return scnprintf(buf, PAGE_SIZE, "%d\n", ret2);
 }
+
+int readvolt(struct ti_smusbdig_device *ti_smusbdig) {
+	int ret = ti_smusbdig->vout;
+	return ret;
+}
+EXPORT_SYMBOL_GPL(readvolt);
+
+void setvolt(struct ti_smusbdig_device *ti_smusbdig, int volts) {
+	ti_smusbdig->vout = volts;
+	return;
+}
+EXPORT_SYMBOL_GPL(setvolt);
 
 int ti_smusbdig_xfer(struct ti_smusbdig_device *ti_smusbdig,
 		     u8 *buffer, int size)
@@ -50,8 +68,7 @@ int ti_smusbdig_xfer(struct ti_smusbdig_device *ti_smusbdig,
 		printk ("failed check\n");
 		return -EINVAL;
         }
-        
-    
+
     void *buffer3 = kmemdup(buffer, TI_SMUSBDIG_PACKET_SIZE, GFP_KERNEL);
 
     printk(KERN_NOTICE "xfer (%p)\n", buffer3);
@@ -60,7 +77,7 @@ int ti_smusbdig_xfer(struct ti_smusbdig_device *ti_smusbdig,
 				usb_sndintpipe(ti_smusbdig->usb_dev, 1),
 				buffer3, size, &actual_length,
 				TI_SMUSBDIG_USB_TIMEOUT_MS);
-				
+
 	kfree(buffer3);
 	if (ret) {
 		dev_err(dev, "USB transaction failed\n");
@@ -71,9 +88,9 @@ int ti_smusbdig_xfer(struct ti_smusbdig_device *ti_smusbdig,
 				usb_rcvintpipe(ti_smusbdig->usb_dev, 1),
 				buffer2, TI_SMUSBDIG_PACKET_SIZE, &actual_length,
 				TI_SMUSBDIG_USB_TIMEOUT_MS);
-	
+
 	memcpy(buffer, buffer2, TI_SMUSBDIG_PACKET_SIZE);
-	
+
 	if (ret) {
 		dev_err(dev, "USB transaction failed\n");
 		return ret;
@@ -105,7 +122,7 @@ static int ti_smusbdig_probe(struct usb_interface *interface,
 		return -ENODEV;
 
     create_sysfs_attrs(interface);
-    
+
 	ti_smusbdig = devm_kzalloc(dev, sizeof(*ti_smusbdig), GFP_KERNEL);
 	if (!ti_smusbdig)
 		return -ENOMEM;
@@ -113,7 +130,7 @@ static int ti_smusbdig_probe(struct usb_interface *interface,
 	ti_smusbdig->usb_dev = usb_get_dev(interface_to_usbdev(interface));
 	ti_smusbdig->interface = interface;
 	usb_set_intfdata(interface, ti_smusbdig);
-    
+
 	buffer[0] = TI_SMUSBDIG_VERSION;
 	ret = ti_smusbdig_xfer(ti_smusbdig, buffer, 1);
 	if (ret)
@@ -122,14 +139,14 @@ static int ti_smusbdig_probe(struct usb_interface *interface,
 	dev_info(dev, "TI SM-USB-DIG Version: %d.%02d Found\n",
 		 buffer[0], buffer[1]);
 
-
 	buffer[0] = TI_SMUSBDIG_COMMAND;
 	buffer[1] = TI_SMUSBDIG_SET_VOUT;
-	buffer[3] = TI_SMUSBDIG_VOUT3;
+	buffer[2] = TI_SMUSBDIG_VOUT3;
 	ret = ti_smusbdig_xfer(ti_smusbdig, buffer, 3);
 	if (ret)
 		return ret;
 
+	ti_smusbdig->vout = 3;
 	dev_set_drvdata(dev, ti_smusbdig);
 	ret = mfd_add_hotplug_devices(dev, ti_smusbdig_mfd_cells,
 				      ARRAY_SIZE(ti_smusbdig_mfd_cells));
@@ -146,11 +163,11 @@ static ssize_t dut_store(struct device *dev,
 				   struct device_attribute *attr,
 				   const char *valbuf, size_t count)
 {
-            struct ti_smusbdig_device *ti_smusbdig = dev_get_drvdata(dev);
-            int volt, ret;
-	        u8 *buffer = kmalloc(TI_SMUSBDIG_PACKET_SIZE, GFP_KERNEL);
-        if (kstrtoint(valbuf, 10, &volt))
-		    return -EINVAL;
+	struct ti_smusbdig_device *ti_smusbdig = dev_get_drvdata(dev);
+	int volt, ret;
+	u8 *buffer = kmalloc(TI_SMUSBDIG_PACKET_SIZE, GFP_KERNEL);
+	if (kstrtoint(valbuf, 10, &volt))
+		return -EINVAL;
 
         if (volt == 0) {
             buffer[0] = TI_SMUSBDIG_COMMAND;
@@ -159,13 +176,18 @@ static ssize_t dut_store(struct device *dev,
         ret = ti_smusbdig_xfer(ti_smusbdig, buffer, 3);
 		if (ret)
 			return ret;
+
+		ti_smusbdig->vout = 0;
         }
-        if (volt == 1) {
+
+        if (volt == 1) {                                  // needs rethink, probly forcing 3v or 5v without a "on" is better
             buffer[0] = TI_SMUSBDIG_COMMAND;
 	        buffer[1] = TI_SMUSBDIG_COMMAND_DUTPOWERON;
         ret = ti_smusbdig_xfer(ti_smusbdig, buffer, 2);
 		if (ret)
 			return ret;
+
+		ti_smusbdig->vout = 1;
         }
         if (volt == 3) {
             buffer[0] = TI_SMUSBDIG_COMMAND;
@@ -174,20 +196,22 @@ static ssize_t dut_store(struct device *dev,
         ret = ti_smusbdig_xfer(ti_smusbdig, buffer, 3);
 		if (ret)
 			return ret;
-			
+
 	        buffer[0] = TI_SMUSBDIG_COMMAND;
 	        buffer[1] = TI_SMUSBDIG_SET_VOUT;
 	        buffer[3] = TI_SMUSBDIG_VOUT3;
 	    ret = ti_smusbdig_xfer(ti_smusbdig, buffer, 3);
 	    if (ret)
 		    return ret;
-         
+
             buffer[0] = TI_SMUSBDIG_COMMAND;
 	        buffer[1] = TI_SMUSBDIG_COMMAND_DUTPOWERON;
         ret = ti_smusbdig_xfer(ti_smusbdig, buffer, 2);
 		if (ret)
 			return ret;
-		}	
+
+		ti_smusbdig->vout = 3;
+		}
         if (volt == 5) {
             buffer[0] = TI_SMUSBDIG_COMMAND;
 	        buffer[1] = TI_SMUSBDIG_SET_VOUT;
@@ -195,14 +219,16 @@ static ssize_t dut_store(struct device *dev,
         ret = ti_smusbdig_xfer(ti_smusbdig, buffer, 3);
 		if (ret)
 			return ret;
-			
+
             buffer[0] = TI_SMUSBDIG_COMMAND;
 	        buffer[1] = TI_SMUSBDIG_COMMAND_DUTPOWERON;
         ret = ti_smusbdig_xfer(ti_smusbdig, buffer, 2);
 		if (ret)
 			return ret;
-         }	   
-         
+
+		ti_smusbdig->vout = 5;
+         }
+
 	     kfree(buffer);
         return count;
 }
@@ -212,8 +238,8 @@ static int create_sysfs_attrs(struct usb_interface *interface)
 {
 	int retval = 0;
 
-			retval = device_create_file(&interface->dev,
-						    &dev_attr_dut);
+	retval = device_create_file(&interface->dev,
+				&dev_attr_dut);
 
 	return retval;
 }
@@ -221,7 +247,7 @@ static int create_sysfs_attrs(struct usb_interface *interface)
 static void remove_sysfs_attrs(struct usb_interface *interface)
 {
 
-			device_remove_file(&interface->dev, &dev_attr_dut);
+	device_remove_file(&interface->dev, &dev_attr_dut);
 }
 
 

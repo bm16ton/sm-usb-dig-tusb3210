@@ -15,7 +15,8 @@
  */
 
 #include <linux/i2c.h>
-#include <linux/mfd/ti-smusbdig.h>
+//#include <linux/mfd/ti-smusbdig.h>
+#include "../ti-smusbdig.h"
 #include <linux/module.h>
 #include <linux/platform_device.h>
 
@@ -35,11 +36,16 @@ enum ti_smusbdig_i2c_command {
 	TI_SMUSBDIG_I2C_ACKS = 0x6,
 };
 
+extern int readvolt(struct ti_smusbdig_device *ti_smusbdig);
+extern void setvolt(struct ti_smusbdig_device *ti_smusbdig, int volts);
+
 static ssize_t dut_show(struct device *dev,
 				  struct device_attribute *attr, char *buf)
 {
-
-		return 0;
+	struct ti_smusbdig_i2c *ti_smusbdig_i2c = dev_get_drvdata(dev);
+	int ret2;
+	ret2 = readvolt(ti_smusbdig_i2c->ti_smusbdig);
+	return scnprintf(buf, PAGE_SIZE, "%d\n", ret2);
 }
 
 static ssize_t dut_store(struct device *dev,
@@ -47,65 +53,69 @@ static ssize_t dut_store(struct device *dev,
 				   const char *valbuf, size_t count)
 {
         struct ti_smusbdig_i2c *ti_smusbdig_i2c = dev_get_drvdata(dev);
+
         u8 *buffer = kmalloc(TI_SMUSBDIG_PACKET_SIZE, GFP_KERNEL);
         int volt, ret;
-	
+
         if (kstrtoint(valbuf, 10, &volt))
 		    return -EINVAL;
 
         if (volt == 0) {
             buffer[0] = TI_SMUSBDIG_COMMAND;
-//	        buffer[1] = TI_SMUSBDIG_SET_VOUT;
             buffer[1] = TI_SMUSBDIG_COMMAND_DUTPOWEROFF;
-//	        buffer[2] = TI_SMUSBDIG_DUTOFF;
         ret = ti_smusbdig_xfer(ti_smusbdig_i2c->ti_smusbdig, buffer, 2);
-		if (ret)
-			return ret;
+	if (ret)
+		return ret;
+	setvolt(ti_smusbdig_i2c->ti_smusbdig, 0);
         }
         if (volt == 1) {
             buffer[0] = TI_SMUSBDIG_COMMAND;
-	        buffer[1] = TI_SMUSBDIG_COMMAND_DUTPOWERON;
+	    buffer[1] = TI_SMUSBDIG_COMMAND_DUTPOWERON;
         ret = ti_smusbdig_xfer(ti_smusbdig_i2c->ti_smusbdig, buffer, 2);
-		if (ret)
-			return ret;
+	if (ret)
+		return ret;
+	setvolt(ti_smusbdig_i2c->ti_smusbdig, 1);
         }
         if (volt == 3) {
             buffer[0] = TI_SMUSBDIG_COMMAND;
-	        buffer[1] = TI_SMUSBDIG_SET_VOUT;
-	        buffer[2] = TI_SMUSBDIG_DUTOFF;
+	    buffer[1] = TI_SMUSBDIG_SET_VOUT;
+	    buffer[2] = TI_SMUSBDIG_DUTOFF;
         ret = ti_smusbdig_xfer(ti_smusbdig_i2c->ti_smusbdig, buffer, 3);
-		if (ret)
-			return ret;
-			
-	        buffer[0] = TI_SMUSBDIG_COMMAND;
-	        buffer[1] = TI_SMUSBDIG_SET_VOUT;
-	        buffer[3] = TI_SMUSBDIG_VOUT3;
-	    ret = ti_smusbdig_xfer(ti_smusbdig_i2c->ti_smusbdig, buffer, 3);
-	    if (ret)
-		    return ret;
-         
+	if (ret)
+		return ret;
+
+	    buffer[0] = TI_SMUSBDIG_COMMAND;
+	    buffer[1] = TI_SMUSBDIG_SET_VOUT;
+	    buffer[3] = TI_SMUSBDIG_VOUT3;
+	ret = ti_smusbdig_xfer(ti_smusbdig_i2c->ti_smusbdig, buffer, 3);
+	if (ret)
+		return ret;
+
             buffer[0] = TI_SMUSBDIG_COMMAND;
-	        buffer[1] = TI_SMUSBDIG_COMMAND_DUTPOWERON;
+	    buffer[1] = TI_SMUSBDIG_COMMAND_DUTPOWERON;
         ret = ti_smusbdig_xfer(ti_smusbdig_i2c->ti_smusbdig, buffer, 2);
-		if (ret)
-			return ret;
-		}	
+	if (ret)
+		return ret;
+
+	setvolt(ti_smusbdig_i2c->ti_smusbdig, 3);
+	}
         if (volt == 5) {
             buffer[0] = TI_SMUSBDIG_COMMAND;
-	        buffer[1] = TI_SMUSBDIG_SET_VOUT;
-	        buffer[2] = TI_SMUSBDIG_DUTOFF;
+	    buffer[1] = TI_SMUSBDIG_SET_VOUT;
+	    buffer[2] = TI_SMUSBDIG_DUTOFF;
         ret = ti_smusbdig_xfer(ti_smusbdig_i2c->ti_smusbdig, buffer, 3);
-		if (ret)
-			return ret;
-			
+	if (ret)
+		return ret;
+
             buffer[0] = TI_SMUSBDIG_COMMAND;
-	        buffer[1] = TI_SMUSBDIG_COMMAND_DUTPOWERON;
+	    buffer[1] = TI_SMUSBDIG_COMMAND_DUTPOWERON;
         ret = ti_smusbdig_xfer(ti_smusbdig_i2c->ti_smusbdig, buffer, 2);
-		if (ret)
-			return ret;
-         }
-         
-	    kfree(buffer);
+	if (ret)
+		return ret;
+	setvolt(ti_smusbdig_i2c->ti_smusbdig, 5);
+	}
+
+	kfree(buffer);
         return count;
 }
 static DEVICE_ATTR_RW(dut);
@@ -114,16 +124,15 @@ static int create_sysfs_attrs(struct i2c_adapter *adapter)
 {
 	int retval = 0;
 
-			retval = device_create_file(&adapter->dev,
-						    &dev_attr_dut);
+	retval = device_create_file(&adapter->dev,
+			&dev_attr_dut);
 
 	return retval;
 }
 
 static void remove_sysfs_attrs(struct i2c_adapter *adapter)
 {
-
-			device_remove_file(&adapter->dev, &dev_attr_dut);
+	device_remove_file(&adapter->dev, &dev_attr_dut);
 }
 
 
@@ -140,8 +149,7 @@ static int ti_smusbdig_i2c_xfer(struct i2c_adapter *adapter,
 	struct ti_smusbdig_i2c *ti_smusbdig_i2c = i2c_get_adapdata(adapter);
 	struct ti_smusbdig_packet packet;
 	int i, j, k, ret;
-    
-    
+
 	for (i = 0; i < num; i++) {
 		ti_smusbdig_i2c_packet_init(&packet);
 		ti_smusbdig_packet_add_command(&packet, TI_SMUSBDIG_I2C_START);
@@ -194,7 +202,7 @@ stop:
 			       (u8 *)&packet, sizeof(packet));
 	if (ret)
 		return ret;
-    
+
 	return num;
 }
 
@@ -226,18 +234,19 @@ static int ti_smusbdig_i2c_probe(struct platform_device *pdev)
 	int ret;
 
 	ti_smusbdig_i2c = devm_kzalloc(dev, sizeof(*ti_smusbdig_i2c), GFP_KERNEL);
-	if (!ti_smusbdig_i2c)
+	if (!ti_smusbdig_i2c) {
+		printk("ti_smusbdig_i2c kzalloc failed\n");
 		return -ENOMEM;
+	}
 
 	ti_smusbdig_i2c->dev = dev;
 	ti_smusbdig_i2c->ti_smusbdig = dev_get_drvdata(dev->parent);
 	ti_smusbdig_i2c->adapter = ti_smusbdig_i2c_adapter;
-	strlcpy(ti_smusbdig_i2c->adapter.name, dev_name(dev),
+	strscpy(ti_smusbdig_i2c->adapter.name, dev_name(dev),
 		sizeof(ti_smusbdig_i2c->adapter.name));
 	ti_smusbdig_i2c->adapter.quirks = &dln2_i2c_quirks;
 	ti_smusbdig_i2c->adapter.dev.parent = dev;
 	ti_smusbdig_i2c->adapter.dev.of_node = dev->of_node;
-
 	i2c_set_adapdata(&ti_smusbdig_i2c->adapter, ti_smusbdig_i2c);
 	platform_set_drvdata(pdev, ti_smusbdig_i2c);
 
@@ -246,9 +255,8 @@ static int ti_smusbdig_i2c_probe(struct platform_device *pdev)
 		dev_err(dev, "unable to add I2C adapter\n");
 		return ret;
 	}
-    
-    create_sysfs_attrs(&ti_smusbdig_i2c->adapter);
 
+        create_sysfs_attrs(&ti_smusbdig_i2c->adapter);
 	dev_info(dev, "TI SM-USB-DIG Added: I2C Bus\n");
 
 	return 0;
